@@ -1,50 +1,41 @@
-# SVR · Proyecto base del integrador
+# SVR - Sistema de Venta y Reabastecimiento
 
-Sistema de Venta y Reabastecimiento para la tienda 0457 de una cadena de tiendas de conveniencia.
-Este proyecto base ya trae la estructura, los datos, la lectura de los CSV y el CEDIS simulado,
-para que el día 2 dediques el tiempo a la lógica de negocio.
+Sistema desarrollado en C# (.NET 8) bajo los principios de **Clean Architecture** (Arquitectura Limpia), diseñado para gestionar catálogos, procesar ventas con reglas de negocio estrictas, aplicar promociones, calcular puntos de reorden y comunicarse de forma concurrente con un Centro de Distribución (CEDIS), generando reportes analíticos tanto en texto como en formato CSV.
 
-- **.NET 8** y **C# 12** (`Directory.Build.props`); `global.json` pide un SDK 8.0.
-- Compila y corre desde el inicio: muestra las filas leídas y las historias pendientes.
+---
 
-## Cómo correr
+## 🏗️ Arquitectura del Sistema
 
-```bash
-dotnet build
-dotnet run --project src/SVR.Consola
-dotnet test
-```
+El proyecto está estructurado en capas desacopladas para garantizar la mantenibilidad, escalabilidad y testabilidad:
 
-## Lo que ya funciona
+1. **`SVR.Dominio`**: Contiene las entidades principales (`Producto`, `Promocion`, `TipoPago`, `Venta`), objetos de valor y excepciones de negocio (`TiendaException`).
+2. **`SVR.Aplicacion`**: Aloja los casos de uso y servicios de lógica de negocio (`ServicioCatalogo`, `ServicioVentas`, `ServicioPromociones`, `ServicioReportes`, `ServicioReabastecimiento`, `ServicioCedisParalelo`).
+3. **`SVR.Infraestructura`**: Gestiona los adaptadores de entrada/salida, lectura de archivos CSV (`LectorCsv`, `LectorPromociones`, `LectorVentas`) y persistencia de logs/reportes.
+4. **`SVR.Consola`**: Capa de presentación (Entry Point) que coordina la ejecución de todo el flujo mediante la interfaz de comandos (`Program.cs`).
+5. **`SVR.Pruebas`**: Capa de pruebas unitarias y de integración para validar las reglas de negocio.
 
-| Pieza | Dónde | Qué hace |
-|---|---|---|
-| `LectorCsv` | `src/SVR.Infraestructura` | Lee un CSV en streaming y regresa cada fila con su número de línea y sus campos como texto. No convierte ni valida |
-| `CedisSimulado` | `src/SVR.Infraestructura` | Simula el CEDIS con demoras reales; el yogurt tarda 4 s, así que con un timeout de 3 s su consulta debe cancelarse |
-| `ICedisServicio`, `IInventarioRepo` | `src/SVR.Aplicacion/Contratos.cs` | Contratos para depender de abstracciones (DIP) |
-| `Reglas` | `src/SVR.Dominio/Reglas.cs` | Tasa de IVA, horario de alcohol y máximo en vales, sin números mágicos |
-| Datos | `datos/` | Catálogo, promociones y ventas del día; se copian junto al ejecutable |
-| Prueba de ejemplo | `tests/SVR.Pruebas` | Prueba de `LectorCsv`, como plantilla para tus pruebas |
+---
 
-## Lo que construyes
+## 📋 Historias de Usuario Implementadas (HU-01 a HU-08)
 
-Cada archivo `Pendientes.cs` describe qué va en esa capa. En `Program.cs`, reemplaza cada `Pendiente(...)` por tu código.
+* **HU-01 y HU-02**: Carga masiva y validación de catálogos y promociones desde archivos CSV, generando bitácoras de rechazo ante errores de formato o precios inválidos.
+* **HU-03 y HU-04**: Procesamiento de transacciones de venta con validación en tiempo real de existencias y aplicación automática de promociones (ej. *2x1* y *Descuento por Volumen*).
+* **HU-05**: Validación de restricciones horarias para la venta de bebidas alcohólicas (permitido exclusivamente de 11:00 AM a 10:00 PM) y generación del **Cierre de Caja** (`cierre_caja.log`).
+* **HU-06**: Disparador automático de órdenes de reabastecimiento hacia el CEDIS cuando el stock de un producto desciende por debajo o iguala su punto de reorden.
+* **HU-07**: Consulta concurrente y en paralelo de existencias en el CEDIS utilizando programación asíncrona avanzada (`Task.WhenAll`, `CancellationTokenSource`) con un **timeout estricto de 3 segundos**.
+* **HU-08**: Exportación de reportes gerenciales avanzados (Top de Ventas y Pedido Sugerido al CEDIS) estructurados en formato **CSV** para análisis financiero y logístico.
 
-| Avance | Hora | Historias | Dónde va |
-|---|---|---|---|
-| 1 | 9:35–10:15 | HU-01 catálogo con validaciones · HU-02 ventas y `rechazos.log` | Dominio (Producto, LineaVenta, excepciones) |
-| 2 | 10:15–11:15 | HU-03 promociones · HU-04 medios de pago · HU-05 reglas de venta · HU-06 inventario | Dominio, Aplicación (ServicioVenta), Infraestructura (InventarioEnMemoria) |
-| 3 | 11:15–12:15 | HU-07 CEDIS en paralelo con timeout · HU-08 pedido sugerido y corte de caja | Aplicación (ServicioReabasto), Infraestructura (CorteCajaExportador) |
+---
 
-Regla de dependencias: Consola → Infraestructura → Aplicación → Dominio. El Dominio no depende de nadie.
+## 🚀 Requisitos Previos
 
-## Los datos
+* [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) instalado en tu equipo.
 
-- **catalogo.csv:** EAN, descripción, categoría, precio (con IVA y punto decimal), punto de reorden y stock.
-- **promociones.csv:** `NXM 2;1` = lleva 2, paga 1 · `PORCENTAJE 15` = 15 % de descuento · `VOLUMEN 6;18.00` = desde 6 piezas, cada una a $18.00.
-- **ventas_0457.csv:** tiene errores a propósito. El sistema debe rechazarlos con número de línea y motivo, y seguir:
-  - línea 4: EAN inexistente → `ProductoNoEncontradoException`
-  - línea 5: `piezas = abc` → error de formato
-  - línea 6: alcohol a las 23:30 → `VentaRestringidaException`
+---
 
-Agrega 50 a 100 líneas de venta propias para que el reporte y el pedido sugerido tengan sentido.
+## ⚙️ Instrucciones de Compilación y Ejecución
+
+1. Clona o ubícate en la carpeta raíz del proyecto (`SVR`).
+2. Restaura las dependencias y compila la solución completa ejecutando en tu terminal:
+   ```bash
+   dotnet build
