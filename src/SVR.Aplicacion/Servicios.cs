@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using SVR.Dominio;
 
 namespace SVR.Aplicacion;
@@ -7,9 +13,10 @@ public class ServicioCatalogo : IServicioCatalogo
     private readonly Dictionary<string, Producto> _catalogo = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<string> _rechazosCatalogo = new();
     private readonly ILectorCatalogo _lectorCatalogo;
+    
     public ServicioCatalogo(ILectorCatalogo lectorCatalogo)
     {
-        _lectorCatalogo = lectorCatalogo;
+        _lectorCatalogo = lectorCatalogo ?? throw new ArgumentNullException(nameof(lectorCatalogo));
     }
 
     public async Task CargarCatalogoAsync(string rutaCsv, CancellationToken cancellationToken = default)
@@ -53,9 +60,9 @@ public class ServicioVentas : IServicioVentas
         IServicioReportes servicioReportes,
         IServicioReabastecimiento servicioReabastecimiento)
     {
-        _servicioCatalogo = servicioCatalogo;
-        _lectorVentas = lectorVentas;
-        _servicioPromociones = servicioPromociones;
+        _servicioCatalogo = servicioCatalogo ?? throw new ArgumentNullException(nameof(servicioCatalogo));
+        _lectorVentas = lectorVentas ?? throw new ArgumentNullException(nameof(lectorVentas));
+        _servicioPromociones = servicioPromociones ?? throw new ArgumentNullException(nameof(servicioPromociones));
         _servicioReportes = servicioReportes ?? throw new ArgumentNullException(nameof(servicioReportes));
         _servicioReabastecimiento = servicioReabastecimiento ?? throw new ArgumentNullException(nameof(servicioReabastecimiento));
     }
@@ -100,7 +107,7 @@ public class ServicioVentas : IServicioVentas
                     if (horaVenta < inicioPermitido || horaVenta > finPermitido)
                     {
                         lineasRechazadas.Add($"[RECHAZADO] TX: {venta.TransaccionId} -> Venta de alcohol fuera de horario permitido ({venta.Fecha:HH:mm}).");
-                        continue; // Rechaza la venta y la manda al log de rechazos
+                        continue; 
                     }
                 }
 
@@ -118,13 +125,23 @@ public class ServicioVentas : IServicioVentas
                     Console.WriteLine($"[VENTA REGULAR] TX: {venta.TransaccionId} | '{producto.Nombre}' x{venta.Cantidad} -> Subtotal: ${subtotalFinal:F2}");
                 }
 
-                // HU-04: Validación de Medio de Pago
+                // HU-04: Validación de Medio de Pago Dinámico
                 try
                 {
-                    var pago = new Pago(venta.TransaccionId, TipoPago.Efectivo, subtotalFinal, subtotalFinal);
+                    TipoPago tipoPagoReal = venta.TipoPago;
+
+                    var pago = new Pago(venta.TransaccionId, tipoPagoReal, subtotalFinal, subtotalFinal);
                     Console.WriteLine($"[PAGO VALIDADO] TX: {venta.TransaccionId} | Método: {pago.Tipo} | Monto Cubierto: ${pago.MontoTotal:F2}");
-                    // HU-05: Registrar en el reporte de cierre
-                    _servicioReportes.RegistrarVentaExitosa(venta.TransaccionId, producto.Nombre, venta.Cantidad, producto.Precio * venta.Cantidad, subtotalFinal, pago.Tipo);
+                    
+                    // HU-05: Registrar en el reporte de cierre de caja con el medio de pago real
+                    _servicioReportes.RegistrarVentaExitosa(
+                        venta.TransaccionId, 
+                        producto.Nombre, 
+                        venta.Cantidad, 
+                        producto.Precio * venta.Cantidad, 
+                        subtotalFinal, 
+                        pago.Tipo
+                    );
                 }
                 catch (Exception exPago)
                 {
@@ -132,6 +149,7 @@ public class ServicioVentas : IServicioVentas
                     continue;
                 }
 
+                // Reducir stock del producto
                 producto.ReducirStock(venta.Cantidad);
 
                 // HU-06: Evaluar reabastecimiento con CEDIS después de la venta
@@ -163,7 +181,7 @@ public class ServicioPromociones : IServicioPromociones
 
     public ServicioPromociones(ILectorPromociones lectorPromociones)
     {
-        _lectorPromociones = lectorPromociones;
+        _lectorPromociones = lectorPromociones ?? throw new ArgumentNullException(nameof(lectorPromociones));
     }
 
     public async Task CargarPromocionesAsync(string rutaCsv, CancellationToken cancellationToken = default)
@@ -183,4 +201,67 @@ public class ServicioPromociones : IServicioPromociones
     {
         return _promociones.FirstOrDefault(p => p.Ean.Equals(ean, StringComparison.OrdinalIgnoreCase) && p.EstaVigente(fecha));
     }
+}
+
+public class ServicioReabastecimiento : IServicioReabastecimiento
+{
+    private readonly List<DetalleReabastecimiento> _productosAReabastecer = new();
+
+    public void EvaluarPuntoReorden(string ean, string productoNombre, int stockActual, int puntoReorden)
+    {
+        if (stockActual <= puntoReorden)
+        {
+            int sugerido = (puntoReorden * 2) - stockActual;
+            if (sugerido <= 0) sugerido = 10;
+
+            _productosAReabastecer.Add(new DetalleReabastecimiento
+            {
+                Ean = ean,
+                ProductoNombre = productoNombre,
+                StockActual = stockActual,
+                PuntoReorden = puntoReorden,
+                CantidadSugerida = sugerido
+            });
+        }
+    }
+
+    public async Task GenerarReporteReabastecimientoAsync(string rutaReporte, CancellationToken cancellationToken = default)
+    {
+        var lineasReporte = new List<string>
+        {
+            "==================================================",
+            $"    REPORTE DE REABASTECIMIENTO CEDIS - SVR      ",
+            $"    Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}      ",
+            "==================================================",
+            "EAN\t\tPRODUCTO\tSTOCK\tREORD\tSUGERIDO",
+            "--------------------------------------------------"
+        };
+
+        foreach (var p in _productosAReabastecer)
+        {
+            lineasReporte.Add($"{p.Ean}\t{p.ProductoNombre}\t{p.StockActual}\t{p.PuntoReorden}\t{p.CantidadSugerida}");
+        }
+
+        lineasReporte.Add("--------------------------------------------------");
+        lineasReporte.Add($"TOTAL DE PRODUCTOS A REABASTECER: {_productosAReabastecer.Count}");
+        lineasReporte.Add("==================================================");
+
+        var dir = Path.GetDirectoryName(rutaReporte);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        await File.WriteAllLinesAsync(rutaReporte, lineasReporte, cancellationToken);
+        Console.WriteLine($"[REPORTE HU-06] Reporte de reabastecimiento CEDIS generado en: {rutaReporte}");
+    }
+}
+
+public class DetalleReabastecimiento
+{
+    public string Ean { get; set; } = string.Empty;
+    public string ProductoNombre { get; set; } = string.Empty;
+    public int StockActual { get; set; }
+    public int PuntoReorden { get; set; }
+    public int CantidadSugerida { get; set; }
 }

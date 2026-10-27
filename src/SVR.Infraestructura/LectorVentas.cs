@@ -1,4 +1,8 @@
+using System;
+using System.IO;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using SVR.Dominio;
 using SVR.Aplicacion;
 
@@ -30,9 +34,11 @@ public class LectorVentas : ILectorVentas
 
             var separador = linea.Contains(';') ? ';' : ',';
             var partes = linea.Split(separador);
-            if (partes.Length < 4)
+            
+            // Validamos que existan al menos 5 columnas (TxId, Ean, Cantidad, Fecha, TipoPago)
+            if (partes.Length < 5)
             {
-                onVentaRechazada(linea, $"Línea {numeroLinea}: Formato de venta inválido.");
+                onVentaRechazada(linea, $"Línea {numeroLinea}: Formato de venta inválido o faltan columnas.");
                 continue;
             }
 
@@ -50,10 +56,19 @@ public class LectorVentas : ILectorVentas
                 fecha = DateTime.Now;
             }
 
+            // Parseo dinámico del Medio de Pago (Efectivo, Tarjeta, Vales)
+            string textoPago = partes[4].Trim();
+            if (!Enum.TryParse<TipoPago>(textoPago, true, out TipoPago tipoPago))
+            {
+                onVentaRechazada(linea, $"Línea {numeroLinea}: Tipo de pago inválido ('{textoPago}').");
+                continue;
+            }
+
             Venta venta;
             try
             {
-                venta = new Venta(txId, ean, cantidad, fecha);
+                // Instanciamos la venta pasándole los 5 parámetros requeridos
+                venta = new Venta(txId, ean, cantidad, fecha, tipoPago);
             }
             catch (Exception ex)
             {

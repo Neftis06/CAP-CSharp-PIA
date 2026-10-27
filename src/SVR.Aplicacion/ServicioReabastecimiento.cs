@@ -1,6 +1,4 @@
-namespace SVR.Aplicacion;
-
-public class SolicitudReabastecimiento
+public class DetalleReabastecimiento
 {
     public string Ean { get; set; } = string.Empty;
     public string ProductoNombre { get; set; } = string.Empty;
@@ -9,28 +7,33 @@ public class SolicitudReabastecimiento
     public int CantidadSugerida { get; set; }
 }
 
+public interface IServicioReabastecimiento
+{
+    void EvaluarPuntoReorden(string ean, string productoNombre, int stockActual, int puntoReorden);
+    Task GenerarReporteReabastecimientoAsync(string rutaReporte, CancellationToken cancellationToken = default);
+}
+
 public class ServicioReabastecimiento : IServicioReabastecimiento
 {
-    private readonly List<SolicitudReabastecimiento> _solicitudesCedis = new();
+    private readonly List<DetalleReabastecimiento> _productosAReabastecer = new();
 
     public void EvaluarPuntoReorden(string ean, string productoNombre, int stockActual, int puntoReorden)
     {
-        // Regla: Si el stock actual es menor o igual al punto de reorden, se pide lote al CEDIS
+        // Si el stock actual es menor o igual al punto de reorden, se añade a la lista de pedido sugerido
         if (stockActual <= puntoReorden)
         {
-            // Calculamos una cantidad sugerida de reabastecimiento (ej. el doble del punto de reorden o un lote base)
-            int cantidadSugerida = puntoReorden > 0 ? puntoReorden * 2 : 10;
+            // Calculamos una cantidad sugerida de reabastecimiento (ej. la diferencia para duplicar el punto de reorden o un lote base)
+            int sugerido = (puntoReorden * 2) - stockActual; 
+            if (sugerido <= 0) sugerido = 10; // Mínimo de respaldo
 
-            _solicitudesCedis.Add(new SolicitudReabastecimiento
+            _productosAReabastecer.Add(new DetalleReabastecimiento
             {
                 Ean = ean,
                 ProductoNombre = productoNombre,
                 StockActual = stockActual,
                 PuntoReorden = puntoReorden,
-                CantidadSugerida = cantidadSugerida
+                CantidadSugerida = sugerido
             });
-
-            Console.WriteLine($"[ALERTA CEDIS] Producto '{productoNombre}' (EAN: {ean}) en stock crítico ({stockActual} <= {puntoReorden}). Orden generada por {cantidadSugerida} unidades.");
         }
     }
 
@@ -39,20 +42,20 @@ public class ServicioReabastecimiento : IServicioReabastecimiento
         var lineasReporte = new List<string>
         {
             "==================================================",
-            $"    REPORTE DE REABASTECIMIENTO CEDIS - SVR       ",
-            $"    Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}     ",
+            $"    REPORTE DE REABASTECIMIENTO CEDIS - SVR      ",
+            $"    Fecha: {DateTime.Now:yyyy-MM-dd HH:mm:ss}      ",
             "==================================================",
-            "EAN\t\tPRODUCTO\t\tSTOCK\tREORDEN\tSUGERIDO",
+            "EAN\t\tPRODUCTO\tSTOCK\tREORD\tSUGERIDO",
             "--------------------------------------------------"
         };
 
-        foreach (var s in _solicitudesCedis)
+        foreach (var p in _productosAReabastecer)
         {
-            lineasReporte.Add($"{s.Ean}\t{s.ProductoNombre}\t{s.StockActual}\t{s.PuntoReorden}\t{s.CantidadSugerida}");
+            lineasReporte.Add($"{p.Ean}\t{p.ProductoNombre}\t{p.StockActual}\t{p.PuntoReorden}\t{p.CantidadSugerida}");
         }
 
         lineasReporte.Add("--------------------------------------------------");
-        lineasReporte.Add($"TOTAL DE PRODUCTOS A REABASTECER: {_solicitudesCedis.Count}");
+        lineasReporte.Add($"TOTAL DE PRODUCTOS A REABASTECER: {_productosAReabastecer.Count}");
         lineasReporte.Add("==================================================");
 
         var dir = Path.GetDirectoryName(rutaReporte);
@@ -62,6 +65,6 @@ public class ServicioReabastecimiento : IServicioReabastecimiento
         }
 
         await File.WriteAllLinesAsync(rutaReporte, lineasReporte, cancellationToken);
-        Console.WriteLine($"\n[REPORTE HU-06] Solicitudes de CEDIS generadas exitosamente en: {rutaReporte}");
+        Console.WriteLine($"[REPORTE HU-06] Reporte de reabastecimiento CEDIS generado en: {rutaReporte}");
     }
 }

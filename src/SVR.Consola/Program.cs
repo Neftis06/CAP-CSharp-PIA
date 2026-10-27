@@ -18,7 +18,7 @@ class Program
         string rutaDatos = Path.Combine(AppContext.BaseDirectory, "datos");
         string rutaCatalogo = Path.Combine(rutaDatos, "catalogo.csv");
         string rutaPromociones = Path.Combine(rutaDatos, "promociones.csv");
-        string rutaVentas = Path.Combine(rutaDatos, "ventas.csv");
+        string rutaVentas = Path.Combine(rutaDatos, "ventas_0457.csv");
         string rutaRechazos = Path.Combine(rutaDatos, "rechazos.log");
         
         // Reportes estándar y en formato CSV (HU-05, HU-06, HU-08)
@@ -37,7 +37,10 @@ class Program
         ILectorVentas lectorVentas = new LectorVentas();
         
         IServicioReportes servicioReportes = new ServicioReportes();
-        IServicioReabastecimiento servicioReabastecimiento = new ServicioReabastecimiento();
+        
+        // CORRECCIÓN: Forzamos el uso del namespace SVR.Aplicacion para evitar conflictos de tipos
+        SVR.Aplicacion.IServicioReabastecimiento servicioReabastecimiento = new SVR.Aplicacion.ServicioReabastecimiento();
+        
         IServicioCedisParalelo servicioCedis = new ServicioCedisParalelo();
 
         // Inyección del servicio de ventas completo con todas sus dependencias

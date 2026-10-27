@@ -1,3 +1,5 @@
+using System;
+
 namespace SVR.Dominio;
 
 public class Venta
@@ -6,8 +8,9 @@ public class Venta
     public string Ean { get; }
     public int Cantidad { get; }
     public DateTime Fecha { get; }
+    public TipoPago TipoPago { get; }
 
-    public Venta(string transaccionId, string ean, int cantidad, DateTime fecha)
+    public Venta(string transaccionId, string ean, int cantidad, DateTime fecha, TipoPago tipoPago)
     {
         if (string.IsNullOrWhiteSpace(transaccionId)) throw new ArgumentException("El ID de transacción no puede estar vacío.", nameof(transaccionId));
         if (string.IsNullOrWhiteSpace(ean)) throw new ArgumentException("El EAN no puede estar vacío.", nameof(ean));
@@ -17,5 +20,6 @@ public class Venta
         Ean = ean.Trim();
         Cantidad = cantidad;
         Fecha = fecha;
+        TipoPago = tipoPago;
     }
 }
