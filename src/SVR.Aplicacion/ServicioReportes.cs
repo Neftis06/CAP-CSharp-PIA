@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using SVR.Dominio;
 
 namespace SVR.Aplicacion;
@@ -60,5 +65,41 @@ public class ServicioReportes : IServicioReportes
 
         await File.WriteAllLinesAsync(rutaReporte, lineasReporte, cancellationToken);
         Console.WriteLine($"\n[REPORTE HU-05] Cierre de caja generado exitosamente en: {rutaReporte}");
+    }
+
+    public async Task GenerarReporteTopVentasCsvAsync(string rutaCsv, IEnumerable<(string Producto, int Cantidad)> topVentas, CancellationToken cancellationToken = default)
+    {
+        var lineas = new List<string> { "producto,cantidad_vendida" };
+        foreach (var item in topVentas)
+        {
+            lineas.Add($"\"{item.Producto}\",{item.Cantidad}");
+        }
+
+        var dir = Path.GetDirectoryName(rutaCsv);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        await File.WriteAllLinesAsync(rutaCsv, lineas, cancellationToken);
+        Console.WriteLine($"[REPORTE HU-08] Top de ventas en CSV generado en: {rutaCsv}");
+    }
+
+    public async Task GenerarReportePedidoSugeridoCsvAsync(string rutaCsv, IEnumerable<(string Ean, string Producto, int Sugerido)> pedidoSugerido, CancellationToken cancellationToken = default)
+    {
+        var lineas = new List<string> { "ean,producto,cantidad_sugerida" };
+        foreach (var item in pedidoSugerido)
+        {
+            lineas.Add($"{item.Ean},\"{item.Producto}\",{item.Sugerido}");
+        }
+
+        var dir = Path.GetDirectoryName(rutaCsv);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        await File.WriteAllLinesAsync(rutaCsv, lineas, cancellationToken);
+        Console.WriteLine($"[REPORTE HU-08] Pedido sugerido CEDIS en CSV generado en: {rutaCsv}");
     }
 }
