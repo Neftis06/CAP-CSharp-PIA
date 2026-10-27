@@ -45,7 +45,7 @@ public class LectorCsv : ILectorCatalogo
 
             string ean = partes[0].Trim();
             string nombre = partes[1].Trim();
-            // partes[2] es la categoría (se omite en la entidad Producto actual)
+            string categoria = partes[2].Trim(); // <--- Categoría leída correctamente
 
             if (string.IsNullOrEmpty(ean))
             {
@@ -68,7 +68,8 @@ public class LectorCsv : ILectorCatalogo
             Producto producto;
             try
             {
-                producto = new Producto(ean, nombre, precio, stock, puntoReorden);
+                // Orden correcto: ean, nombre, categoria, precio, stock, puntoReorden
+                producto = new Producto(ean, nombre, categoria, precio, stock, puntoReorden);
             }
             catch (Exception ex)
             {

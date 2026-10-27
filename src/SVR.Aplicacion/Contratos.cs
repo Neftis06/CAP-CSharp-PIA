@@ -7,11 +7,6 @@ public interface ILectorCatalogo
     IAsyncEnumerable<Producto> LeerCatalogoAsync(string rutaArchivo, Action<string, string> onLineaRechazada, CancellationToken cancellationToken = default);
 }
 
-public interface ILectorVentas
-{
-    IAsyncEnumerable<Venta> LeerVentasAsync(string rutaArchivo, Action<string, string> onVentaRechazada, CancellationToken cancellationToken = default);
-}
-
 public interface IServicioCatalogo
 {
     Task CargarCatalogoAsync(string rutaCsv, CancellationToken cancellationToken = default);
@@ -19,12 +14,28 @@ public interface IServicioCatalogo
     IReadOnlyDictionary<string, Producto> ObtenerTodos();
 }
 
+public interface ILectorVentas
+{
+    IAsyncEnumerable<Venta> LeerVentasAsync(string rutaArchivo, Action<string, string> onRechazada, CancellationToken cancellationToken = default);
+}
+
 public interface IServicioVentas
 {
-    Task ProcesarVentasAsync(string rutaVentasCsv, string rutaRechazosLog, CancellationToken cancellationToken = default);
+    Task ProcesarVentasAsync(string rutaVentas, string rutaRechazos, CancellationToken cancellationToken = default);
+}
+
+public interface ILectorPromociones
+{
+    IAsyncEnumerable<Promocion> LeerPromocionesAsync(string rutaArchivo, Action<string, string> onRechazada, CancellationToken cancellationToken = default);
+}
+
+public interface IServicioPromociones
+{
+    Task CargarPromocionesAsync(string rutaCsv, CancellationToken cancellationToken = default);
+    Promocion? ObtenerPromocionActiva(string ean, DateTime fecha);
 }
 
 public interface ICedisServicio
 {
-    Task<int> ExistenciaAsync(string ean, CancellationToken ct);
+    Task SolicitarReabastecimientoAsync(string ean, int cantidad, CancellationToken cancellationToken = default);
 }

@@ -1,21 +1,37 @@
 using SVR.Aplicacion;
+using SVR.Dominio;
 
 namespace SVR.Infraestructura;
 
-public sealed class CedisSimulado : ICedisServicio
+public class CedisSimulado : ICedisServicio
 {
-    private static readonly Dictionary<string, (int Existencia, int DemoraMs)> Datos = new()
-    {
-        ["7501055300075"] = (1240, 400),   
-        ["7501000111206"] = (380, 700),    
-        ["7501234500011"] = (960, 900),    
-        ["7501030411111"] = (55, 4000),    
-    };
+    private readonly string _rutaLogCedis;
 
-    public async Task<int> ExistenciaAsync(string ean, CancellationToken ct)
+    public CedisSimulado(string rutaLogCedis = "cedis_pedidos.log")
     {
-        var (existencia, demoraMs) = Datos.TryGetValue(ean, out var dato) ? dato : (0, 300);
-        await Task.Delay(demoraMs, ct);
-        return existencia;
+        _rutaLogCedis = rutaLogCedis;
+    }
+
+    public async Task SolicitarReabastecimientoAsync(string ean, int cantidad, CancellationToken cancellationToken = default)
+    {
+        string mensaje = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] PEDIDO CEDIS -> EAN: {ean} | Cantidad Solicitada: {cantidad}";
+        
+        Console.WriteLine($"[CEDIS] ¡Alerta de reorden cruzada! {mensaje}");
+
+        // Opcional: Guardar una bitácora física de los pedidos enviados al CEDIS
+        try
+        {
+            var directorio = Path.GetDirectoryName(_rutaLogCedis);
+            if (!string.IsNullOrEmpty(directorio) && !Directory.Exists(directorio))
+            {
+                Directory.CreateDirectory(directorio);
+            }
+            
+            await File.AppendAllTextAsync(_rutaLogCedis, mensaje + Environment.NewLine, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR CEDIS] No se pudo escribir en el log de pedidos: {ex.Message}");
+        }
     }
 }
